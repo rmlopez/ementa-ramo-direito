@@ -3,9 +3,15 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.metrics import classification_report
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.externals import joblib
 import nltk
 import os
+import itertools
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 
 model_classifier_name = 'classifier.pkl'
 model_vectorizer_name = 'vectorizer.pkl'
@@ -30,7 +36,9 @@ class TextCls():
         X_train_trans = self.tfidf_transformer.fit_transform(X_train_vect)
 
         #self.classifier = KNeighborsClassifier(n_neighbors=self.k)
-        self.classifier = MultinomialNB()
+        #self.classifier = MultinomialNB()
+        linearSVC = LinearSVC()
+        self.classifier = CalibratedClassifierCV(linearSVC)
 
         self.classifier.fit(X_train_trans, self.y_train)
 
@@ -47,13 +55,16 @@ class TextCls():
         y_pred = sorted([(self.label_names[ind], score) for ind, score in y_pred], key=lambda x: -x[1])
         return y_pred
 
-    def report(self, y_test, y_pred):
+    def report(self, x_test, y_test, y_pred):
         print(classification_report(y_test, y_pred, target_names=self.label_names, digits=4))
 
+        cnf_matrix = confusion_matrix(y_test, y_pred)
+        self.plot_confusion_matrix(cnf_matrix)
         total = 0
         same = 0
-        for i in range(len(y_test)):
-            if y_test[i] == y_pred[i]:
+        y_test_array = y_test.tolist()
+        for i in range(len(y_test_array)):
+            if y_test_array[i] == y_pred[i]:
                 same += 1
             total += 1
         print(total, same)
@@ -78,9 +89,43 @@ class TextCls():
     @staticmethod
     def exists_saved_model():
         file_exists = os.path.exists(model_classifier_name) and os.path.exists(model_vectorizer_name) and os.path.exists(model_tfidf_transformer_name) and os.path.exists(model_label_names_name)
-        print(file_exists)
         return file_exists
 
+    def plot_confusion_matrix(self, cm,
+                              normalize=False,
+                              title='Confusion matrix',
+
+                              cmap=plt.cm.Blues):
+        classes = self.label_names
+        np.set_printoptions(precision=2)
+        plt.figure()
+
+        if normalize:
+            cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+            print("Normalized confusion matrix")
+        else:
+            print('Confusion matrix, without normalization')
+
+        print(cm)
+
+        plt.imshow(cm, interpolation='nearest', cmap=cmap)
+        plt.title(title)
+        plt.colorbar()
+        tick_marks = np.arange(len(classes))
+        plt.xticks(tick_marks, classes, rotation=45)
+        plt.yticks(tick_marks, classes)
+
+        fmt = '.2f' if normalize else 'd'
+        thresh = cm.max() / 2.
+        for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+            plt.text(j, i, format(cm[i, j], fmt),
+                     horizontalalignment="center",
+                     color="white" if cm[i, j] > thresh else "black")
+
+        plt.tight_layout()
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        plt.show()
 
 def main():
 
